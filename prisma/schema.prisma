@@ -1,0 +1,575 @@
+// Nexus Cleaning & Housekeeping Service Database Schema
+// PostgreSQL with Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// CLEANERS
+// ============================================================================
+
+model Cleaner {
+  id                String        @id @default(uuid())
+  userId            String?       @unique // Reference to User in auth service
+
+  firstName         String
+  lastName          String
+  email             String        @unique
+  phone             String
+
+  // Employment
+  employmentType    EmploymentType @default(CONTRACTOR)
+  hireDate          DateTime      @default(now())
+  status            CleanerStatus @default(ACTIVE)
+
+  // Capabilities & Specialties
+  specialties       Json          @default("[]") // [pet-friendly, eco-products, deep-clean]
+  certifications    Json          @default("[]") // [{name, issuer, date, expires}]
+  languages         Json          @default("[]") // [en, es, fr]
+
+  // Service Areas (ZIP codes or property IDs they can serve)
+  serviceZipCodes   Json          @default("[]")
+  serviceProperties Json          @default("[]") // specific property IDs
+
+  // Availability
+  workSchedule      Json          @default("{}") // {monday: [{start: "09:00", end: "17:00"}], ...}
+  maxTasksPerDay    Int           @default(3)
+
+  // Performance Metrics
+  averageRating     Decimal?      @db.Decimal(3, 2) // 0.00 - 5.00
+  totalRatings      Int           @default(0)
+  totalTasksCompleted Int         @default(0)
+  onTimeCompletionRate Decimal?   @db.Decimal(5, 4) // 0.0000 - 1.0000
+
+  // Payment Info
+  hourlyRate        Decimal?      @db.Decimal(10, 2)
+  paymentMethod     PaymentMethod @default(DIRECT_DEPOSIT)
+  paymentDetails    Json?         // {account_number, routing_number, etc.}
+
+  // Emergency Contact
+  emergencyContact  Json?         // {name, phone, relationship}
+
+  // Profile
+  photoUrl          String?
+  bio               String?
+
+  // Relationships
+  cleaningTasks     CleaningTask[]
+  availabilityBlocks CleanerAvailability[]
+  performanceReviews PerformanceReview[]
+  payments          CleanerPayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([email])
+  @@map("cleaners")
+}
+
+enum EmploymentType {
+  EMPLOYEE
+  CONTRACTOR
+  PARTNER_COMPANY
+}
+
+enum CleanerStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  SUSPENDED
+  TERMINATED
+}
+
+enum PaymentMethod {
+  DIRECT_DEPOSIT
+  CHECK
+  PAYPAL
+  VENMO
+  CASH
+}
+
+model CleanerAvailability {
+  id          String   @id @default(uuid())
+  cleanerId   String
+
+  date        DateTime @db.Date
+  startTime   String   // HH:mm format
+  endTime     String   // HH:mm format
+
+  isAvailable Boolean  @default(true)
+  reason      String?  // vacation, sick, personal
+
+  // Relationships
+  cleaner     Cleaner  @relation(fields: [cleanerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([cleanerId, date, startTime])
+  @@index([cleanerId, date])
+  @@map("cleaner_availability")
+}
+
+// ============================================================================
+// CLEANING TASKS
+// ============================================================================
+
+model CleaningTask {
+  id                   String         @id @default(uuid())
+  propertyId           String
+  unitId               String?
+  reservationId        String?        // Linked reservation if checkout/mid-stay clean
+
+  // Assignment
+  assignedCleanerId    String?
+  assignmentMethod     AssignmentMethod @default(MANUAL)
+
+  // Task Details
+  taskType             CleaningTaskType
+  priority             TaskPriority   @default(NORMAL)
+  status               TaskStatus     @default(SCHEDULED)
+
+  // Scheduling
+  scheduledDate        DateTime       @db.Date
+  scheduledStartTime   String         // HH:mm format
+  estimatedDuration    Int            // minutes
+
+  // Execution
+  actualStartTime      DateTime?
+  actualEndTime        DateTime?
+  actualDuration       Int?           // minutes
+
+  // Checklist & Verification
+  checklistTemplate    String         @default("standard") // standard, deep, move-out, etc.
+  checklist            Json           // [{room, task, completed, photo_url, notes, timestamp}]
+  checklistCompletionRate Decimal?    @db.Decimal(5, 4) // 0.0000 - 1.0000
+
+  // Photos (before/after verification)
+  photosBefore         Json           @default("[]")
+  photosAfter          Json           @default("[]")
+
+  // Supplies Used
+  suppliesUsed         Json           @default("[]") // [{item_id, quantity, cost}]
+  totalSupplyCost      Decimal?       @db.Decimal(10, 2)
+
+  // Issues & Notes
+  issuesReported       Json           @default("[]") // [{type, description, severity, photo}]
+  cleanerNotes         String?
+  managerNotes         String?
+
+  // Quality Check
+  qualityCheckRequired Boolean        @default(false)
+  qualityCheckDone     Boolean        @default(false)
+  qualityCheckBy       String?
+  qualityCheckAt       DateTime?
+  qualityRating        Int?           // 1-5
+  qualityNotes         String?
+
+  // Guest Feedback (if applicable)
+  guestRating          Int?           // 1-5
+  guestFeedback        String?
+
+  // Access & Coordination
+  accessCode           String?
+  accessMethod         AccessMethod?
+  coordinationNotes    String?
+
+  // Payment
+  laborCost            Decimal?       @db.Decimal(10, 2)
+  totalCost            Decimal?       @db.Decimal(10, 2)
+  paidToCleaner        Boolean        @default(false)
+
+  // Relationships
+  cleaner              Cleaner?       @relation(fields: [assignedCleanerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  completedAt DateTime?
+
+  @@index([propertyId, scheduledDate])
+  @@index([assignedCleanerId, scheduledDate])
+  @@index([status])
+  @@index([reservationId])
+  @@map("cleaning_tasks")
+}
+
+enum CleaningTaskType {
+  CHECKOUT          // After guest checks out
+  MID_STAY          // During longer stays
+  DEEP_CLEAN        // Periodic deep cleaning
+  EMERGENCY         // Urgent cleaning needed
+  MOVE_IN           // Pre-guest arrival
+  INSPECTION_PREP   // Before inspection
+  TURNOVER          // Quick turnover between guests
+  STAGING           // For photography/showing
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  SCHEDULED
+  ASSIGNED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  FAILED
+  REQUIRES_REVIEW
+}
+
+enum AssignmentMethod {
+  MANUAL
+  AUTO_ASSIGNED
+  SELF_ASSIGNED
+  ROUND_ROBIN
+  PROXIMITY_BASED
+}
+
+enum AccessMethod {
+  SMART_LOCK_CODE
+  KEY_LOCKBOX
+  MEET_OWNER
+  KEY_ON_SITE
+  OTHER
+}
+
+// ============================================================================
+// CLEANING CHECKLISTS & TEMPLATES
+// ============================================================================
+
+model ChecklistTemplate {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  taskType         CleaningTaskType
+
+  description      String?
+
+  // Checklist Structure
+  rooms            Json     // [{name, tasks: [{task, required, photo_required}]}]
+
+  estimatedDuration Int     // minutes
+
+  // Required Supplies
+  requiredSupplies Json     @default("[]") // [{item_id, quantity}]
+
+  // Quality Standards
+  qualityStandards Json?    // [{criteria, description, importance}]
+
+  isActive         Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("checklist_templates")
+}
+
+// ============================================================================
+// CLEANING SCHEDULES
+// ============================================================================
+
+model CleaningSchedule {
+  id                 String   @id @default(uuid())
+  propertyId         String
+
+  scheduleType       ScheduleType
+
+  // Frequency (for recurring schedules)
+  frequency          String?  // daily, weekly, biweekly, monthly
+  dayOfWeek          Int?     // 0-6 (Sunday-Saturday)
+  dayOfMonth         Int?     // 1-31
+
+  // Time
+  preferredTime      String   // HH:mm format
+  duration           Int      // minutes
+
+  // Assignment
+  preferredCleanerId String?
+  autoAssign         Boolean  @default(true)
+
+  // Task Template
+  taskType           CleaningTaskType
+  checklistTemplate  String
+
+  // Status
+  isActive           Boolean  @default(true)
+  lastExecuted       DateTime?
+  nextExecution      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([propertyId])
+  @@index([nextExecution])
+  @@map("cleaning_schedules")
+}
+
+enum ScheduleType {
+  RESERVATION_BASED  // Auto-created from reservations
+  RECURRING          // Fixed recurring schedule
+  ONE_TIME           // Manual one-time task
+}
+
+// ============================================================================
+// PERFORMANCE & REVIEWS
+// ============================================================================
+
+model PerformanceReview {
+  id                String   @id @default(uuid())
+  cleanerId         String
+  reviewerId        String   // Manager user ID
+
+  reviewPeriodStart DateTime @db.Date
+  reviewPeriodEnd   DateTime @db.Date
+
+  // Metrics
+  tasksCompleted    Int
+  averageRating     Decimal  @db.Decimal(3, 2)
+  onTimeRate        Decimal  @db.Decimal(5, 4)
+  qualityScore      Decimal  @db.Decimal(5, 4)
+
+  // Ratings (1-5)
+  ratingQuality     Int
+  ratingSpeed       Int
+  ratingCommunication Int
+  ratingReliability Int
+
+  // Feedback
+  strengths         Json     @default("[]")
+  areasForImprovement Json   @default("[]")
+  notes             String?
+
+  // Goals
+  goalsSet          Json?    // [{goal, deadline, status}]
+
+  // Overall
+  overallRating     Int      // 1-5
+  recommendContinue Boolean
+
+  // Relationships
+  cleaner           Cleaner  @relation(fields: [cleanerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cleanerId])
+  @@map("performance_reviews")
+}
+
+// ============================================================================
+// PAYMENT TRACKING
+// ============================================================================
+
+model CleanerPayment {
+  id              String   @id @default(uuid())
+  cleanerId       String
+
+  paymentPeriodStart DateTime @db.Date
+  paymentPeriodEnd   DateTime @db.Date
+
+  // Tasks & Earnings
+  taskIds         Json     // Array of cleaning_task IDs
+  totalTasks      Int
+  totalHours      Decimal  @db.Decimal(10, 2)
+
+  // Amounts
+  baseEarnings    Decimal  @db.Decimal(10, 2)
+  bonuses         Decimal  @db.Decimal(10, 2) @default(0)
+  deductions      Decimal  @db.Decimal(10, 2) @default(0)
+  totalEarnings   Decimal  @db.Decimal(10, 2)
+
+  // Payment Details
+  paymentMethod   PaymentMethod
+  status          PaymentStatus @default(PENDING)
+  paidAt          DateTime?
+
+  transactionId   String?
+  notes           String?
+
+  // Relationships
+  cleaner         Cleaner  @relation(fields: [cleanerId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cleanerId, paymentPeriodEnd])
+  @@map("cleaner_payments")
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  DISPUTED
+}
+
+// ============================================================================
+// INVENTORY SUPPLIES
+// ============================================================================
+
+model CleaningSupply {
+  id                 String   @id @default(uuid())
+  sku                String   @unique
+  name               String
+  category           SupplyCategory
+
+  description        String?
+  brand              String?
+
+  unitOfMeasure      String   // each, bottle, gallon, pack
+  unitsPerPackage    Int      @default(1)
+
+  // Costing
+  costPerUnit        Decimal  @db.Decimal(10, 2)
+
+  // Stock Levels
+  minStockLevel      Int      @default(10)
+  currentStock       Int      @default(0)
+
+  // Vendor
+  vendorName         String?
+  vendorSku          String?
+  lastOrderDate      DateTime?
+
+  // Eco-Friendly
+  isEcoFriendly      Boolean  @default(false)
+  certifications     Json     @default("[]") // [EPA Safer Choice, Green Seal]
+
+  isActive           Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("cleaning_supplies")
+}
+
+enum SupplyCategory {
+  CLEANER
+  DISINFECTANT
+  POLISH
+  TOOL
+  EQUIPMENT
+  PAPER_GOODS
+  TRASH_BAGS
+  LAUNDRY
+  OTHER
+}
+
+// ============================================================================
+// SUPPLY USAGE TRACKING
+// ============================================================================
+
+model SupplyUsage {
+  id              String   @id @default(uuid())
+  supplyId        String
+  cleaningTaskId  String?
+  propertyId      String?
+
+  quantity        Int
+  costAtTime      Decimal  @db.Decimal(10, 2)
+
+  usedBy          String   // cleaner ID
+  usedAt          DateTime @default(now())
+
+  notes           String?
+
+  @@index([supplyId])
+  @@index([cleaningTaskId])
+  @@index([usedAt])
+  @@map("supply_usage")
+}
+
+// ============================================================================
+// ROUTE OPTIMIZATION
+// ============================================================================
+
+model CleaningRoute {
+  id              String   @id @default(uuid())
+  cleanerId       String
+  routeDate       DateTime @db.Date
+
+  // Route Details
+  taskIds         Json     // Ordered array of cleaning_task IDs
+  startLocation   Json?    // {lat, lng, address}
+  endLocation     Json?    // {lat, lng, address}
+
+  // Optimization
+  totalDistance   Decimal? @db.Decimal(10, 2) // miles
+  totalDriveTime  Int?     // minutes
+  estimatedStart  String   // HH:mm
+  estimatedEnd    String   // HH:mm
+
+  // Execution
+  actualStart     DateTime?
+  actualEnd       DateTime?
+
+  status          RouteStatus @default(PLANNED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([cleanerId, routeDate])
+  @@index([cleanerId, routeDate])
+  @@map("cleaning_routes")
+}
+
+enum RouteStatus {
+  PLANNED
+  IN_PROGRESS
+  COMPLETED
+  MODIFIED
+}
+
+// ============================================================================
+// INTEGRATION EVENTS
+// ============================================================================
+
+model CleaningEvent {
+  id              String   @id @default(uuid())
+  eventType       EventType
+  entityType      EntityType
+  entityId        String
+
+  payload         Json
+
+  // Integration
+  sourceService   String?  // property-management, smart-lock, etc.
+  processed       Boolean  @default(false)
+  processedAt     DateTime?
+
+  error           String?
+  retryCount      Int      @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([eventType, processed])
+  @@index([entityType, entityId])
+  @@map("cleaning_events")
+}
+
+enum EventType {
+  RESERVATION_CREATED
+  RESERVATION_CANCELLED
+  CHECKOUT_COMPLETED
+  ACCESS_CODE_GENERATED
+  TASK_ASSIGNED
+  TASK_COMPLETED
+  ISSUE_REPORTED
+}
+
+enum EntityType {
+  RESERVATION
+  CLEANING_TASK
+  CLEANER
+  PROPERTY
+}
