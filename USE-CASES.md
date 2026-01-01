@@ -82,9 +82,9 @@ flowchart TD
 
 ### Business Impact
 
-- **28% reduction** in cleaning costs
-- **Zero missed turnovers** in peak season
-- **22% improvement** in staff utilization
+- **Reduced cleaning costs** through optimized scheduling
+- **Fewer missed turnovers** with AI-driven assignments
+- **Improved staff utilization** via route optimization
 
 ---
 
@@ -150,8 +150,8 @@ class QualityControlSystem {
 
 ### Business Impact
 
-- **15% improvement** in guest satisfaction
-- **60% reduction** in quality-related complaints
+- **Improved guest satisfaction** through consistent quality
+- **Fewer quality-related complaints** with AI scoring
 - **Documented proof** for dispute resolution
 
 ---
@@ -311,7 +311,7 @@ flowchart LR
 
 ### Business Impact
 
-- **18% productivity improvement** through targeted coaching
+- **Productivity improvement** through targeted coaching
 - **Reduced turnover** via recognition programs
 - **Data-driven** staffing decisions
 

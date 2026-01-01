@@ -1,0 +1,115 @@
+{
+  "name": "nexus-cleaning",
+  "displayName": "CleanPro - AI-Powered Cleaning Management",
+  "version": "1.0.0",
+  "description": "Intelligent cleaning operations management for hospitality and property management. AI-optimized scheduling, quality control, inventory tracking, and staff coordination.",
+  "developer": {
+    "name": "Adverant",
+    "url": "https://adverant.ai",
+    "email": "plugins@adverant.ai",
+    "verified": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/adverant/Adverant-Nexus-Plugin-Cleaning"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "cleaning",
+    "housekeeping",
+    "hospitality",
+    "property-management",
+    "scheduling",
+    "quality-control",
+    "operations"
+  ],
+  "nexus": {
+    "minVersion": "1.0.0",
+    "executionMode": "mcp_container",
+    "isolationLevel": 2,
+    "capabilities": [
+      "schedule-optimization",
+      "staff-assignment",
+      "quality-inspection",
+      "inventory-tracking",
+      "task-management",
+      "reporting"
+    ],
+    "permissions": [
+      "network:external",
+      "filesystem:temp",
+      "service:mageagent"
+    ],
+    "entrypoint": "dist/index.js",
+    "healthCheck": "/health",
+    "readinessCheck": "/ready",
+    "livenessCheck": "/live"
+  },
+  "resources": {
+    "cpuMillicores": 500,
+    "memoryMB": 1024,
+    "diskGB": 5,
+    "timeoutMs": 120000,
+    "maxConcurrentJobs": 20
+  },
+  "api": {
+    "version": "v1",
+    "basePath": "/api/v1/cleaning",
+    "endpoints": [
+      {
+        "method": "POST",
+        "path": "/schedules/optimize",
+        "description": "Optimize cleaning schedule"
+      },
+      {
+        "method": "GET",
+        "path": "/tasks",
+        "description": "List cleaning tasks"
+      },
+      {
+        "method": "POST",
+        "path": "/inspections",
+        "description": "Create inspection report"
+      },
+      {
+        "method": "GET",
+        "path": "/analytics",
+        "description": "Get performance analytics"
+      }
+    ]
+  },
+  "pricing": {
+    "model": "tiered",
+    "currency": "USD",
+    "tiers": [
+      {
+        "name": "starter",
+        "displayName": "Starter",
+        "priceMonthly": 4900,
+        "limits": { "properties": 5, "staff": 20 },
+        "features": ["basic-scheduling", "task-management"]
+      },
+      {
+        "name": "professional",
+        "displayName": "Professional",
+        "priceMonthly": 14900,
+        "limits": { "properties": 25, "staff": 100 },
+        "features": ["ai-optimization", "quality-control", "analytics"],
+        "popular": true
+      },
+      {
+        "name": "enterprise",
+        "displayName": "Enterprise",
+        "priceMonthly": -1,
+        "limits": { "properties": -1, "staff": -1 },
+        "features": ["unlimited", "custom-integrations", "dedicated-support"]
+      }
+    ]
+  },
+  "marketplace": {
+    "category": "operations",
+    "subcategory": "facility-management",
+    "featured": false,
+    "tags": ["cleaning", "housekeeping", "hospitality", "operations", "scheduling"]
+  }
+}

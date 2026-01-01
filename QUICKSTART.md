@@ -1,6 +1,6 @@
 # CleanPro Quick Start Guide
 
-Reduce cleaning costs by 28% and improve guest satisfaction scores by 15% with AI-optimized scheduling, quality control, and staff coordination. Get your first automated schedule running in under 5 minutes.
+AI-optimized scheduling, quality control, and staff coordination to reduce cleaning costs and improve service quality. Get your first automated schedule running in under 5 minutes.
 
 ## Prerequisites
 
